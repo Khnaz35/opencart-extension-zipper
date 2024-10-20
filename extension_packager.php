@@ -41,8 +41,8 @@ if (isset($_GET['package'])) {
     $result = $conn->query("SELECT file_path FROM file_paths WHERE extension_name='$extension_name' AND opencart_version='$opencart_version'");
 
     // Prepare upload folder
-    $upload_folder = "{$extension_name}" . DIRECTORY_SEPARATOR . "{$opencart_version}" . DIRECTORY_SEPARATOR . "upload" . DIRECTORY_SEPARATOR;
-    $zip_folder = "{$extension_name}" . DIRECTORY_SEPARATOR . "{$opencart_version}" . DIRECTORY_SEPARATOR;
+    $upload_folder = "All-Extensions/{$extension_name}" . DIRECTORY_SEPARATOR . "{$opencart_version}" . DIRECTORY_SEPARATOR . "upload" . DIRECTORY_SEPARATOR;
+    $zip_folder = "All-Extensions/{$extension_name}" . DIRECTORY_SEPARATOR . "{$opencart_version}" . DIRECTORY_SEPARATOR;
     if (!is_dir($upload_folder)) {
         mkdir($upload_folder, 0777, true);
     }

@@ -1,15 +1,15 @@
 <?php
-$host = 'localhost'; // Your database host
-$db = 'extension_packager'; // Your database name
-$user = 'root'; // Your database username
-$pass = ''; // Your database password
+$host = 'localhost';
+$db = 'extension_packager';
+$user = 'root';
+$pass = '';
 
-// Create a connection
-$conn = new mysqli($host, $user, $pass, $db);
+// Create a PostgreSQL connection
+$conn = pg_connect("host=$host dbname=$db user=$user password=$pass");
 
 // Check connection
-if ($conn->connect_error) {
-    die("Connection failed: " . $conn->connect_error);
+if (!$conn) {
+    die("Connection failed: " . pg_last_error());
 }
 
 // Handle form submission for adding paths
@@ -21,13 +21,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_path'])) {
     $zip_name = $_POST['zip_name'];
 
     // Clear existing paths for this extension and version before adding new ones
-    $conn->query("DELETE FROM file_paths WHERE extension_name='$extension_name' AND opencart_version='$opencart_version'");
+    $query = "DELETE FROM file_paths WHERE extension_name=$1 AND opencart_version=$2";
+    $result = pg_query_params($conn, $query, [$extension_name, $opencart_version]);
 
     foreach ($file_paths as $file_path) {
-        $stmt = $conn->prepare("INSERT INTO file_paths (extension_name, opencart_version, file_path, zip_name) VALUES (?, ?, ?, ?)");
-        $stmt->bind_param("ssss", $extension_name, $opencart_version, $file_path, $zip_name);
-        $stmt->execute();
-        $stmt->close();
+        $query = "INSERT INTO file_paths (extension_name, opencart_version, file_path, zip_name) VALUES ($1, $2, $3, $4)";
+        $result = pg_query_params($conn, $query, [$extension_name, $opencart_version, $file_path, $zip_name]);
+        if (!$result) {
+            die("Error in SQL query: " . pg_last_error());
+        }
     }
 }
 
@@ -38,7 +40,7 @@ if (isset($_GET['package'])) {
     $opencart_version = $_GET['opencart_version'];
     $zip_name = $_GET['zip_name'] ?: "{$extension_name}_{$opencart_version}.zip"; // Default zip name if not provided
 
-    $result = $conn->query("SELECT file_path FROM file_paths WHERE extension_name='$extension_name' AND opencart_version='$opencart_version'");
+    $result = pg_query_params($conn, "SELECT file_path FROM file_paths WHERE extension_name=$1 AND opencart_version=$2", [$extension_name, $opencart_version]);
 
     // Prepare upload folder
     $upload_folder = "All-Extensions/{$extension_name}" . DIRECTORY_SEPARATOR . "{$opencart_version}" . DIRECTORY_SEPARATOR . "upload" . DIRECTORY_SEPARATOR;
@@ -57,7 +59,7 @@ if (isset($_GET['package'])) {
     $base_path = 'C:/laragon/www/dev-oc3'; // Adjust this base path as needed
     $base_path_2 = 'C:\laragon\www\dev-oc3'; // Adjust this base path as needed
 
-    while ($row = $result->fetch_assoc()) {
+    while ($row = pg_fetch_assoc($result)) {
         $file_path = $row['file_path'];
 
         // Get relative path based on the base path
@@ -75,7 +77,6 @@ if (isset($_GET['package'])) {
             if (copy($file_path, $upload_path)) {
                 // Add file to zip
                 $relative_path = 'upload\\'.ltrim($relative_path, '\\');
-                //echo $relative_path;
                 $zip->addFile($upload_path, $relative_path);
             } else {
                 echo "Failed to copy file: {$file_path} to {$upload_path}\n";
@@ -111,10 +112,10 @@ if (isset($_GET['package'])) {
     echo "<div class=\"alert alert-success\">Files packaged successfully into {$zip_name}.</div>";
 }
 
-
 // Clean up file paths on page load
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['clear'])) {
-    $conn->query("DELETE FROM file_paths WHERE extension_name='{$_GET['extension_name']}' AND opencart_version='{$_GET['opencart_version']}'");
+    $query = "DELETE FROM file_paths WHERE extension_name=$1 AND opencart_version=$2";
+    $result = pg_query_params($conn, $query, [$_GET['extension_name'], $_GET['opencart_version']]);
 }
 
 // Fetch existing paths for editing
@@ -122,20 +123,20 @@ $existing_paths = [];
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['extension_name'], $_GET['opencart_version'])) {
     $extension_name = $_GET['extension_name'];
     $opencart_version = $_GET['opencart_version'];
-    $result = $conn->query("SELECT * FROM file_paths WHERE extension_name='$extension_name' AND opencart_version='$opencart_version'");
-    while ($row = $result->fetch_assoc()) {
+    $result = pg_query_params($conn, "SELECT * FROM file_paths WHERE extension_name=$1 AND opencart_version=$2", [$extension_name, $opencart_version]);
+    while ($row = pg_fetch_assoc($result)) {
         $existing_paths[] = $row;
     }
 }
 
 // Fetch all extensions for the list
 $extensions = [];
-$extension_result = $conn->query("SELECT DISTINCT extension_name, opencart_version, zip_name FROM file_paths");
-while ($row = $extension_result->fetch_assoc()) {
+$extension_result = pg_query($conn, "SELECT DISTINCT extension_name, opencart_version, zip_name FROM file_paths");
+while ($row = pg_fetch_assoc($extension_result)) {
     $extensions[] = $row;
 }
 
-$conn->close();
+pg_close($conn);
 ?>
 
 <!DOCTYPE html>
